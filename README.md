@@ -96,7 +96,7 @@
         <div class="palette-scroll" id="paletteList"></div>
         
         <button class="main-btn" id="saveBtn" onclick="saveOrder()">保存並同步雲端資料</button>
-        <button id="cancelBtn" onclick="resetForm()" style="display:none; width:100%; margin-top:10px; border:none; background:none; color:#777; text-decoration: underline;">清空表單 / 取消修改模式</button>
+        <button id="cancelBtn" onclick="resetForm()" style="display:none; width:100%; margin-top:10px; border:none; background:none; color:#777; text-decoration: underline;">取消修改模式</button>
     </div>
 
     <div style="display: flex; justify-content: space-between; margin: 15px 5px;">
@@ -184,7 +184,6 @@
         document.getElementById('shipDate').valueAsDate = date;
     }
 
-    // 核心覆蓋邏輯
     async function saveOrder() {
         const site = document.getElementById('siteName').value;
         if(!site) return alert("請填寫案場名稱");
@@ -194,9 +193,8 @@
 
         const currentId = document.getElementById('editId').value;
 
-        // 建立新資料物件
         const updatedOrder = {
-            id: currentId || Date.now(), // 如果是修改就用舊 ID，如果是新增就產新 ID
+            id: currentId || Date.now(),
             site: site, 
             manager: document.getElementById('manager').value,
             orderDate: document.getElementById('orderDate').value,
@@ -207,36 +205,26 @@
             isClosed: false
         };
 
-        // 尋找清單中是否有這筆 ID (用來判斷是覆蓋還是新增)
         const idx = orders.findIndex(o => String(o.id) === String(updatedOrder.id));
 
         if (idx > -1) {
-            // 模式：修改原本的訂單
-            updatedOrder.isClosed = orders[idx].isClosed; // 保留原本的結束狀態
-            orders[idx] = updatedOrder; // 直接覆蓋
+            updatedOrder.isClosed = orders[idx].isClosed;
+            orders[idx] = updatedOrder;
         } else {
-            // 模式：新增訂單
             orders.unshift(updatedOrder);
         }
         
         try {
-            // 送回雲端
-            const resp = await fetch(API_URL, { method: "POST", body: JSON.stringify(orders) });
+            await fetch(API_URL, { method: "POST", body: JSON.stringify(orders) });
             localStorage.setItem('dapu_db_local', JSON.stringify(orders));
             
-            statusEl.innerText = "✅ 資料已成功更新";
+            // 重要：同步完成後呼叫 resetForm() 讓介面恢復初始狀態
+            resetForm();
             
-            // 重新刷新介面顯示
+            statusEl.innerText = "✅ 資料已成功更新";
             renderCalendar();
             renderOrders();
 
-            // 完成後清空狀態
-            document.getElementById('editId').value = "";
-            document.getElementById('saveBtn').innerText = "保存並同步雲端資料";
-            document.getElementById('cancelBtn').style.display = "none";
-            
-            // 如果您希望修改完就清空輸入框，可以調用 resetForm()
-            // 如果希望留著資料繼續微調，則維持現狀
         } catch (e) { 
             alert("同步失敗，請檢查網路！"); 
             statusEl.innerText = "❌ 同步失敗";
@@ -302,15 +290,11 @@
         else { tip.style.display = 'none'; }
     }
 
-    // 進入修改模式
     function editOrder(id) {
         const o = orders.find(x => String(x.id) === String(id));
         if(!o) return;
 
-        // 鎖定 ID
         document.getElementById('editId').value = o.id;
-        
-        // 填入資料
         document.getElementById('siteName').value = o.site;
         document.getElementById('manager').value = o.manager;
         document.getElementById('orderDate').value = o.orderDate;
@@ -342,6 +326,7 @@
 
     function changeMonth(n) { viewDate.setMonth(viewDate.getMonth() + n); renderCalendar(); }
     
+    // 重設表單：清空 ID 並恢復為「新增訂單」模式
     function resetForm() {
         document.getElementById('editId').value = "";
         document.getElementById('siteName').value = "";
