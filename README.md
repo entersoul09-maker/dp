@@ -36,8 +36,8 @@
         label { display: block; font-size: 0.75rem; color: #777; margin-bottom: 4px; font-weight: bold; }
         input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; background: #FAFAFA; -webkit-appearance: none; }
         
-        /* 色板選擇區 (橫向捲動優化) */
-        .palette-label { display: flex; justify-content: space-between; align-items: center; }
+        /* 色板選擇區 */
+        .palette-label { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
         .palette-scroll { 
             display: flex; gap: 8px; overflow-x: auto; padding: 10px 0;
             -webkit-overflow-scrolling: touch;
@@ -56,6 +56,7 @@
         
         .main-btn { width: 100%; padding: 15px; background: #333; color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: bold; margin-top: 10px; }
         .date-warn { font-size: 0.7rem; color: #E67E22; margin-top: 4px; display: none; }
+        .memo-tag { color: #E67E22; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -87,11 +88,17 @@
             <div>
                 <label>最終出貨日 (不含六日)</label>
                 <input type="date" id="shipDate" onchange="validateShipDate(this)">
-                <div id="dateWarn" class="date-warn">⚠️ 週末不出貨，已自動調整為週一。</div>
+                <div id="dateWarn" class="date-warn">⚠️ 週末不出貨，已自動跳至週一。</div>
             </div>
         </div>
+        
+        <div style="margin-bottom:12px;">
+            <label>訂單備註 (特殊需求紀錄)</label>
+            <input type="text" id="orderMemo" placeholder="例如：需搬三樓、下午送貨...">
+        </div>
+
         <div class="palette-label">
-            <label>色板款式 (橫向滑動多選)</label>
+            <label>色板款式 (橫滑多選)</label>
             <span id="colorCount" style="font-size:0.7rem; color:#999;">已選 0 項</span>
         </div>
         <div class="palette-scroll" id="paletteList"></div>
@@ -104,7 +111,6 @@
 </div>
 
 <script>
-    // 32色款式 + 外訂版 + 其他
     const paletteData = [
         "D317A 水藍", "D321A 鐵灰", "D322A 尼羅河綠", "D301B 黑織紗", "D302B 灰織紗", "D395B 布紋棕",
         "D1060B 波爾多雪松", "D1122B 風化碳木", "D1183B 北美原橡", "D1185B 冰島白橡", "D1187B 凡爾賽橡木", "D1348 洗白橡木",
@@ -114,7 +120,7 @@
         "D555C 粉朵拉櫚木", "外訂版", "ETC 其他"
     ];
 
-    let orders = JSON.parse(localStorage.getItem('dapu_final_v1')) || [];
+    let orders = JSON.parse(localStorage.getItem('dapu_memo_v1')) || [];
     let selectedColors = new Set();
     let viewDate = new Date();
 
@@ -128,13 +134,8 @@
     }
 
     function toggleColor(el, name) {
-        if(selectedColors.has(name)) {
-            selectedColors.delete(name);
-            el.classList.remove('selected');
-        } else {
-            selectedColors.add(name);
-            el.classList.add('selected');
-        }
+        if(selectedColors.has(name)) { selectedColors.delete(name); el.classList.remove('selected'); }
+        else { selectedColors.add(name); el.classList.add('selected'); }
         document.getElementById('colorCount').innerText = `已選 ${selectedColors.size} 項`;
     }
 
@@ -158,8 +159,8 @@
 
     function adjustIfWeekend(date) {
         const day = date.getDay();
-        if (day === 6) date.setDate(date.getDate() + 2); // 移至週一
-        else if (day === 0) date.setDate(date.getDate() + 1); // 移至週一
+        if (day === 6) date.setDate(date.getDate() + 2);
+        else if (day === 0) date.setDate(date.getDate() + 1);
     }
 
     function renderCalendar() {
@@ -175,8 +176,7 @@
         for(let i=0; i<firstDay; i++) grid.innerHTML += '<div></div>';
         for(let d=1; d<=lastDate; d++) {
             const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-            const dayOfWeek = new Date(y, m, d).getDay();
-            const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+            const isWeekend = ([0,6].includes(new Date(y, m, d).getDay()));
             const hasEvent = orders.some(o => o.ship === dateStr && !o.isClosed);
             grid.innerHTML += `<div class="cal-date ${isWeekend?'weekend':''} ${hasEvent?'has-event':''}" onclick="showTip('${dateStr}')">${d}</div>`;
         }
@@ -198,13 +198,14 @@
             id: document.getElementById('editId').value || Date.now(),
             site: site, manager: document.getElementById('manager').value,
             ship: document.getElementById('shipDate').value,
+            memo: document.getElementById('orderMemo').value,
             colors: Array.from(selectedColors).join(', '),
             isClosed: false
         };
         const idx = orders.findIndex(o => o.id == order.id);
         if(idx > -1) { order.isClosed = orders[idx].isClosed; orders[idx] = order; }
         else { orders.unshift(order); }
-        localStorage.setItem('dapu_final_v1', JSON.stringify(orders));
+        localStorage.setItem('dapu_memo_v1', JSON.stringify(orders));
         location.reload();
     }
 
@@ -218,7 +219,11 @@
                 </div>
                 <div class="order-info">
                     <h3 style="margin:0;">${o.site}</h3>
-                    <p style="margin:5px 0; font-size:0.85rem; color:#666;">🚚 出貨日：${o.ship}<br>🎨 色板：${o.colors || '未選'}</p>
+                    <p style="margin:5px 0; font-size:0.85rem; color:#666;">
+                        🚚 出貨日：${o.ship}<br>
+                        🎨 色板：${o.colors || '未選'}<br>
+                        ${o.memo ? `📝 備註：<span class="memo-tag">${o.memo}</span>` : ''}
+                    </p>
                 </div>
             </div>
         `).join('');
@@ -230,6 +235,7 @@
         document.getElementById('siteName').value = o.site;
         document.getElementById('manager').value = o.manager;
         document.getElementById('shipDate').value = o.ship;
+        document.getElementById('orderMemo').value = o.memo || '';
         
         selectedColors.clear();
         document.querySelectorAll('.palette-btn').forEach(btn => {
@@ -246,14 +252,12 @@
     }
 
     function resetForm() { location.reload(); }
-
     function toggleStatus(id) {
         const idx = orders.findIndex(o => o.id == id);
         orders[idx].isClosed = !orders[idx].isClosed;
-        localStorage.setItem('dapu_final_v1', JSON.stringify(orders));
+        localStorage.setItem('dapu_memo_v1', JSON.stringify(orders));
         renderOrders(); renderCalendar();
     }
-
     function changeMonth(n) { viewDate.setMonth(viewDate.getMonth() + n); renderCalendar(); }
     function shareSite() { navigator.share({ title: '達譜系統', url: window.location.href }); }
 
