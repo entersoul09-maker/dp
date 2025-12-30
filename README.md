@@ -92,7 +92,7 @@
             <div><label>負責人</label><input type="text" id="manager" placeholder="姓名"></div>
         </div>
         <div class="form-row">
-            <div><label>下單日</label><input type="date" id="startDate" onchange="autoCalc()"></div>
+            <div><label>大板到貨日</label><input type="date" id="startDate" onchange="autoCalc()"></div>
             <div>
                 <label>最終出貨日 (不含六日)</label>
                 <input type="date" id="shipDate" onchange="validateShipDate(this)">
