@@ -42,7 +42,11 @@
         .palette-btn { flex: 0 0 auto; padding: 8px 16px; border: 1px solid var(--border); border-radius: 20px; font-size: 0.8rem; background: #fff; text-align: center; }
         .palette-btn.selected { background: var(--accent); color: white; border-color: var(--accent); }
 
-        /* 列表與統計 */
+        /* 列表管理工具 */
+        .list-tools { display: flex; justify-content: space-between; align-items: center; margin: 15px 5px 10px; }
+        .toggle-label { font-size: 0.85rem; color: #666; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+
+        /* 訂單卡片 */
         .order-card { background: white; border-radius: 10px; padding: 15px; margin-bottom: 10px; position: relative; border-left: 5px solid var(--accent); box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
         .order-card.closed { border-left-color: #ccc; opacity: 0.6; }
         .btn-group { position: absolute; top: 12px; right: 10px; display: flex; gap: 5px; }
@@ -57,9 +61,7 @@
             display: flex; flex-direction: column; align-items: center; 
             padding: 20px 5px 40px; margin-top: 20px; border-top: 2px solid #EEE;
         }
-        .stats-display { 
-            text-align: center; margin-bottom: 15px; width: 100%;
-        }
+        .stats-display { text-align: center; margin-bottom: 15px; width: 100%; }
         .stats-label { font-size: 0.8rem; color: #888; margin-bottom: 5px; }
         .stats-number { font-size: 1.5rem; color: var(--accent); font-weight: 900; }
         
@@ -95,7 +97,7 @@
             <input type="date" id="orderDate">
         </div>
         <div class="form-row">
-            <div><label>大板到貨日</label><input type="date" id="arrivalDate" onchange="autoCalc()"></div>
+            <div><label>大阪到貨日</label><input type="date" id="arrivalDate" onchange="autoCalc()"></div>
             <div>
                 <label>最終出貨日 (不含六日)</label>
                 <input type="date" id="shipDate" onchange="validateShipDate(this)">
@@ -115,6 +117,13 @@
         <button id="cancelBtn" onclick="resetForm()" style="display:none; width:100%; margin-top:10px; border:none; background:none; color:#999; font-size:0.8rem;">取消修正</button>
     </div>
 
+    <div class="list-tools">
+        <div style="font-weight: bold; font-size: 0.9rem;">案場清單</div>
+        <label class="toggle-label">
+            <input type="checkbox" id="hideClosedToggle" onchange="toggleHideClosed()"> 隱藏已結束案場
+        </label>
+    </div>
+
     <div id="orderList"></div>
 
     <div class="footer-section">
@@ -131,12 +140,14 @@
         "D317A 水藍", "D321A 鐵灰", "D322A 尼羅河綠", "D301B 黑織紗", "D302B 灰織紗", "D395B 布紋棕",
         "D1060B 波爾多雪松", "D1122B 風化碳木", "D1183B 北美原橡", "D1185B 冰島白橡", "D1187B 凡爾賽橡木", "D1348 洗白橡木",
         "D1370B 橡木洗白", "D2091B 丹麥櫸木", "D2415B 安藤清水模", "D3183B 瑞典灰榆", "D5007B 摩卡柚木", "D6357B 白雲岩",
-        "D6358B 泥灰岩", "D371B 台灣柚木", "D373B 古典榆木", "D376B 曉灰榆木", "D3381B 札拉淺橡", "D3383B 札拉灰橡",
+        "D6358B 泥灰岩", "D371B 台灣柚木", "D373B 古古典榆木", "D376B 曉灰榆木", "D3381B 札拉淺橡", "D3383B 札拉灰橡",
         "D6590C 奶茶米", "D9058C 北歐白核桃", "D6000C 珍珠白", "D6000SC 雪白紋", "D702C 象牙灰", "D552C 艾夏櫚木",
         "D555C 粉朵拉櫚木", "外訂版", "ETC 其他"
     ];
 
-    let orders = JSON.parse(localStorage.getItem('dapu_v5_final')) || [];
+    // 初始化資料（從 localStorage 讀取，確保重開網頁資料還在）
+    let orders = JSON.parse(localStorage.getItem('dapu_v6_db')) || [];
+    let hideClosed = JSON.parse(localStorage.getItem('dapu_hide_closed')) || false;
     let selectedColors = new Set();
     let viewDate = new Date();
 
@@ -145,8 +156,15 @@
         pList.innerHTML = paletteData.map(name => `<div class="palette-btn" onclick="toggleColor(this, '${name}')">${name}</div>`).join('');
         document.getElementById('orderDate').valueAsDate = new Date();
         document.getElementById('arrivalDate').valueAsDate = new Date();
+        document.getElementById('hideClosedToggle').checked = hideClosed;
         autoCalc();
         renderCalendar();
+        renderOrders();
+    }
+
+    function toggleHideClosed() {
+        hideClosed = document.getElementById('hideClosedToggle').checked;
+        localStorage.setItem('dapu_hide_closed', JSON.stringify(hideClosed));
         renderOrders();
     }
 
@@ -200,7 +218,6 @@
         updateStats();
     }
 
-    // 重點：依照顯示月份的出貨日計算總量
     function updateStats() {
         const y = viewDate.getFullYear(), m = viewDate.getMonth();
         const monthlyCount = orders.filter(o => {
@@ -235,15 +252,20 @@
         const idx = orders.findIndex(o => o.id == order.id);
         if(idx > -1) { order.isClosed = orders[idx].isClosed; orders[idx] = order; }
         else { orders.unshift(order); }
-        localStorage.setItem('dapu_v5_final', JSON.stringify(orders));
+        localStorage.setItem('dapu_v6_db', JSON.stringify(orders));
         location.reload();
     }
 
     function renderOrders() {
         const container = document.getElementById('orderList');
-        // 依照出貨日排序（最近的在上面）
-        const sortedOrders = [...orders].sort((a,b) => new Date(b.ship) - new Date(a.ship));
-        container.innerHTML = sortedOrders.map(o => `
+        let displayOrders = [...orders].sort((a,b) => new Date(b.ship) - new Date(a.ship));
+        
+        // 根據開關篩選
+        if (hideClosed) {
+            displayOrders = displayOrders.filter(o => !o.isClosed);
+        }
+
+        container.innerHTML = displayOrders.map(o => `
             <div class="order-card ${o.isClosed?'closed':''}">
                 <div class="btn-group">
                     <button class="action-btn" style="color:orange" onclick="editOrder(${o.id})">修正</button>
@@ -287,7 +309,7 @@
     function toggleStatus(id) {
         const idx = orders.findIndex(o => o.id == id);
         orders[idx].isClosed = !orders[idx].isClosed;
-        localStorage.setItem('dapu_v5_final', JSON.stringify(orders));
+        localStorage.setItem('dapu_v6_db', JSON.stringify(orders));
         renderOrders(); renderCalendar();
     }
     function changeMonth(n) { viewDate.setMonth(viewDate.getMonth() + n); renderCalendar(); }
