@@ -75,6 +75,7 @@
 
     <div class="input-card">
         <input type="hidden" id="editId">
+        
         <div class="form-row">
             <div><label>案場名稱</label><input type="text" id="siteName"></div>
             <div><label>客戶</label><input type="text" id="manager"></div>
@@ -93,8 +94,9 @@
         </div>
         <label>色板款式 (橫滑多選)</label>
         <div class="palette-scroll" id="paletteList"></div>
+        
         <button class="main-btn" id="saveBtn" onclick="saveOrder()">保存並同步雲端資料</button>
-        <button id="cancelBtn" onclick="resetForm()" style="display:none; width:100%; margin-top:10px; border:none; background:none; color:#777; text-decoration: underline;">清空表單 / 取消修改</button>
+        <button id="cancelBtn" onclick="resetForm()" style="display:none; width:100%; margin-top:10px; border:none; background:none; color:#777; text-decoration: underline;">清空表單 / 取消修改模式</button>
     </div>
 
     <div style="display: flex; justify-content: space-between; margin: 15px 5px;">
@@ -182,6 +184,7 @@
         document.getElementById('shipDate').valueAsDate = date;
     }
 
+    // 核心覆蓋邏輯
     async function saveOrder() {
         const site = document.getElementById('siteName').value;
         if(!site) return alert("請填寫案場名稱");
@@ -189,9 +192,13 @@
         const statusEl = document.getElementById('syncStatus');
         statusEl.innerText = "📤 正在上傳...";
 
-        const order = {
-            id: document.getElementById('editId').value || Date.now(),
-            site: site, manager: document.getElementById('manager').value,
+        const currentId = document.getElementById('editId').value;
+
+        // 建立新資料物件
+        const updatedOrder = {
+            id: currentId || Date.now(), // 如果是修改就用舊 ID，如果是新增就產新 ID
+            site: site, 
+            manager: document.getElementById('manager').value,
             orderDate: document.getElementById('orderDate').value,
             arrival: document.getElementById('arrivalDate').value,
             ship: document.getElementById('shipDate').value,
@@ -200,22 +207,40 @@
             isClosed: false
         };
 
-        const idx = orders.findIndex(o => o.id == order.id);
-        if(idx > -1) { order.isClosed = orders[idx].isClosed; orders[idx] = order; }
-        else { orders.unshift(order); }
+        // 尋找清單中是否有這筆 ID (用來判斷是覆蓋還是新增)
+        const idx = orders.findIndex(o => String(o.id) === String(updatedOrder.id));
+
+        if (idx > -1) {
+            // 模式：修改原本的訂單
+            updatedOrder.isClosed = orders[idx].isClosed; // 保留原本的結束狀態
+            orders[idx] = updatedOrder; // 直接覆蓋
+        } else {
+            // 模式：新增訂單
+            orders.unshift(updatedOrder);
+        }
         
         try {
-            await fetch(API_URL, { method: "POST", body: JSON.stringify(orders) });
+            // 送回雲端
+            const resp = await fetch(API_URL, { method: "POST", body: JSON.stringify(orders) });
             localStorage.setItem('dapu_db_local', JSON.stringify(orders));
-            statusEl.innerText = "✅ 已成功同步";
-            // 被動更新：不重整頁面，直接重新渲染列表
+            
+            statusEl.innerText = "✅ 資料已成功更新";
+            
+            // 重新刷新介面顯示
             renderCalendar();
             renderOrders();
-            // 儲存後僅清空 ID 與修改狀態，保留表單內容以便連續輸入
+
+            // 完成後清空狀態
             document.getElementById('editId').value = "";
             document.getElementById('saveBtn').innerText = "保存並同步雲端資料";
-            document.getElementById('cancelBtn').style.display = "block";
-        } catch (e) { alert("同步失敗，請檢查網路"); }
+            document.getElementById('cancelBtn').style.display = "none";
+            
+            // 如果您希望修改完就清空輸入框，可以調用 resetForm()
+            // 如果希望留著資料繼續微調，則維持現狀
+        } catch (e) { 
+            alert("同步失敗，請檢查網路！"); 
+            statusEl.innerText = "❌ 同步失敗";
+        }
     }
 
     function renderOrders() {
@@ -224,7 +249,7 @@
         if (hideClosed) list = list.filter(o => String(o.isClosed) !== "true");
         
         container.innerHTML = list.map(o => `
-            <div class="order-card ${String(o.isClosed) === "true" ? 'closed' : ''}">
+            <div class="order-card ${String(o.isClosed) === "true" ? 'closed' : ''}" id="card-${o.id}">
                 <div class="btn-group">
                     <button class="action-btn" onclick="editOrder(${o.id})">修改</button>
                     <button class="action-btn" onclick="toggleStatus(${o.id})">${String(o.isClosed) === "true" ? '恢復' : '結束'}</button>
@@ -277,10 +302,15 @@
         else { tip.style.display = 'none'; }
     }
 
+    // 進入修改模式
     function editOrder(id) {
-        const o = orders.find(x => x.id == id);
-        // 填入所有資料
+        const o = orders.find(x => String(x.id) === String(id));
+        if(!o) return;
+
+        // 鎖定 ID
         document.getElementById('editId').value = o.id;
+        
+        // 填入資料
         document.getElementById('siteName').value = o.site;
         document.getElementById('manager').value = o.manager;
         document.getElementById('orderDate').value = o.orderDate;
@@ -288,17 +318,16 @@
         document.getElementById('shipDate').value = o.ship;
         document.getElementById('orderMemo').value = o.memo;
         
-        // 關鍵：將色板重新勾選
         selectedColors = new Set(o.colors ? o.colors.split(', ') : []);
         renderPalette();
 
-        document.getElementById('saveBtn').innerText = "確認修改並同步雲端";
+        document.getElementById('saveBtn').innerText = "確認並覆蓋原本訂單";
         document.getElementById('cancelBtn').style.display = "block";
         window.scrollTo({top: 0, behavior: 'smooth'});
     }
 
     async function toggleStatus(id) {
-        const idx = orders.findIndex(o => o.id == id);
+        const idx = orders.findIndex(o => String(o.id) === String(id));
         orders[idx].isClosed = !(String(orders[idx].isClosed) === "true");
         await fetch(API_URL, { method: "POST", body: JSON.stringify(orders) });
         renderOrders(); 
