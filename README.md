@@ -38,17 +38,11 @@
         
         /* 色板選擇區 */
         .palette-label { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
-        .palette-scroll { 
-            display: flex; gap: 8px; overflow-x: auto; padding: 10px 0;
-            -webkit-overflow-scrolling: touch;
-        }
-        .palette-btn { 
-            flex: 0 0 auto; padding: 8px 16px; border: 1px solid var(--border);
-            border-radius: 20px; font-size: 0.8rem; background: #fff; text-align: center;
-        }
+        .palette-scroll { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0; -webkit-overflow-scrolling: touch; }
+        .palette-btn { flex: 0 0 auto; padding: 8px 16px; border: 1px solid var(--border); border-radius: 20px; font-size: 0.8rem; background: #fff; text-align: center; }
         .palette-btn.selected { background: var(--accent); color: white; border-color: var(--accent); }
 
-        /* 訂單列表 */
+        /* 列表與統計 */
         .order-card { background: white; border-radius: 10px; padding: 15px; margin-bottom: 10px; position: relative; border-left: 5px solid var(--accent); box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
         .order-card.closed { border-left-color: #ccc; opacity: 0.6; }
         .btn-group { position: absolute; top: 12px; right: 10px; display: flex; gap: 5px; }
@@ -58,13 +52,12 @@
         .date-warn { font-size: 0.7rem; color: #E67E22; margin-top: 4px; display: none; }
         .memo-tag { color: #E67E22; font-weight: bold; }
 
-        /* 匯出按鈕樣式 */
-        .export-section { text-align: center; padding: 20px 0 40px; }
-        .export-btn { 
-            background: none; border: 1px solid #999; color: #666; 
-            padding: 10px 25px; border-radius: 5px; font-size: 0.85rem; 
-            cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+        .footer-section { 
+            display: flex; justify-content: space-between; align-items: center; 
+            padding: 20px 5px 40px; margin-top: 10px; border-top: 1px dashed #ccc;
         }
+        .stats-box { font-size: 0.85rem; color: #444; background: #eee; padding: 8px 12px; border-radius: 8px; font-weight: bold; }
+        .export-btn { background: white; border: 1px solid #999; color: #666; padding: 8px 15px; border-radius: 5px; font-size: 0.8rem; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -91,8 +84,12 @@
             <div><label>案場名稱</label><input type="text" id="siteName" placeholder="案場名稱"></div>
             <div><label>負責人</label><input type="text" id="manager" placeholder="姓名"></div>
         </div>
+        <div style="margin-bottom:12px;">
+            <label>下單日</label>
+            <input type="date" id="orderDate">
+        </div>
         <div class="form-row">
-            <div><label>大板到貨日</label><input type="date" id="startDate" onchange="autoCalc()"></div>
+            <div><label>大阪到貨日</label><input type="date" id="arrivalDate" onchange="autoCalc()"></div>
             <div>
                 <label>最終出貨日 (不含六日)</label>
                 <input type="date" id="shipDate" onchange="validateShipDate(this)">
@@ -101,23 +98,22 @@
         </div>
         <div style="margin-bottom:12px;">
             <label>訂單備註</label>
-            <input type="text" id="orderMemo" placeholder="例如：需搬三樓、下午送貨...">
+            <input type="text" id="orderMemo" placeholder="案場特殊需求紀錄...">
         </div>
         <div class="palette-label">
             <label>色板款式 (橫滑多選)</label>
             <span id="colorCount" style="font-size:0.7rem; color:#999;">已選 0 項</span>
         </div>
         <div class="palette-scroll" id="paletteList"></div>
-        <button class="main-btn" id="saveBtn" onclick="saveOrder()">保存訂單紀錄</button>
+        <button class="main-btn" id="saveBtn" onclick="saveOrder()">保存紀錄</button>
         <button id="cancelBtn" onclick="resetForm()" style="display:none; width:100%; margin-top:10px; border:none; background:none; color:#999; font-size:0.8rem;">取消修正</button>
     </div>
 
     <div id="orderList"></div>
 
-    <div class="export-section">
-        <button class="export-btn" onclick="exportExcel()">
-            <span>📊</span> 輸出成 Excel 報表
-        </button>
+    <div class="footer-section">
+        <div class="stats-box" id="monthlyStats">本月訂單總數：0</div>
+        <button class="export-btn" onclick="exportExcel()">📊 輸出 Excel</button>
     </div>
 </div>
 
@@ -131,17 +127,19 @@
         "D555C 粉朵拉櫚木", "外訂版", "ETC 其他"
     ];
 
-    let orders = JSON.parse(localStorage.getItem('dapu_final_v2')) || [];
+    let orders = JSON.parse(localStorage.getItem('dapu_v4_final')) || [];
     let selectedColors = new Set();
     let viewDate = new Date();
 
     function init() {
         const pList = document.getElementById('paletteList');
         pList.innerHTML = paletteData.map(name => `<div class="palette-btn" onclick="toggleColor(this, '${name}')">${name}</div>`).join('');
-        document.getElementById('startDate').valueAsDate = new Date();
+        document.getElementById('orderDate').valueAsDate = new Date();
+        document.getElementById('arrivalDate').valueAsDate = new Date();
         autoCalc();
         renderCalendar();
         renderOrders();
+        updateStats();
     }
 
     function toggleColor(el, name) {
@@ -151,7 +149,7 @@
     }
 
     function autoCalc() {
-        let date = new Date(document.getElementById('startDate').value);
+        let date = new Date(document.getElementById('arrivalDate').value);
         if(isNaN(date)) return;
         date.setDate(date.getDate() + 6);
         adjustIfWeekend(date);
@@ -189,6 +187,16 @@
             const hasEvent = orders.some(o => o.ship === dateStr && !o.isClosed);
             grid.innerHTML += `<div class="cal-date ${isWeekend?'weekend':''} ${hasEvent?'has-event':''}" onclick="showTip('${dateStr}')">${d}</div>`;
         }
+        updateStats();
+    }
+
+    function updateStats() {
+        const y = viewDate.getFullYear(), m = viewDate.getMonth();
+        const monthlyCount = orders.filter(o => {
+            const d = new Date(o.ship);
+            return d.getFullYear() === y && d.getMonth() === m;
+        }).length;
+        document.getElementById('monthlyStats').innerText = `本月訂單總數：${monthlyCount}`;
     }
 
     function showTip(date) {
@@ -206,6 +214,8 @@
         const order = {
             id: document.getElementById('editId').value || Date.now(),
             site: site, manager: document.getElementById('manager').value,
+            orderDate: document.getElementById('orderDate').value,
+            arrival: document.getElementById('arrivalDate').value,
             ship: document.getElementById('shipDate').value,
             memo: document.getElementById('orderMemo').value,
             colors: Array.from(selectedColors).join(', '),
@@ -214,7 +224,7 @@
         const idx = orders.findIndex(o => o.id == order.id);
         if(idx > -1) { order.isClosed = orders[idx].isClosed; orders[idx] = order; }
         else { orders.unshift(order); }
-        localStorage.setItem('dapu_final_v2', JSON.stringify(orders));
+        localStorage.setItem('dapu_v4_final', JSON.stringify(orders));
         location.reload();
     }
 
@@ -229,9 +239,11 @@
                 <div class="order-info">
                     <h3 style="margin:0;">${o.site}</h3>
                     <p style="margin:5px 0; font-size:0.85rem; color:#666;">
-                        🚚 出貨日：${o.ship}<br>
+                        📝 下單日：${o.orderDate || '未填'}<br>
+                        📦 大阪到貨日：${o.arrival || '未填'}<br>
+                        🚚 最終出貨日：${o.ship}<br>
                         🎨 色板：${o.colors || '未選'}<br>
-                        ${o.memo ? `📝 備註：<span class="memo-tag">${o.memo}</span>` : ''}
+                        ${o.memo ? `✏️ 備註：<span class="memo-tag">${o.memo}</span>` : ''}
                     </p>
                 </div>
             </div>
@@ -243,15 +255,14 @@
         document.getElementById('editId').value = o.id;
         document.getElementById('siteName').value = o.site;
         document.getElementById('manager').value = o.manager;
+        document.getElementById('orderDate').value = o.orderDate || '';
+        document.getElementById('arrivalDate').value = o.arrival || '';
         document.getElementById('shipDate').value = o.ship;
         document.getElementById('orderMemo').value = o.memo || '';
         selectedColors.clear();
         document.querySelectorAll('.palette-btn').forEach(btn => {
             btn.classList.remove('selected');
-            if(o.colors.includes(btn.innerText)) {
-                selectedColors.add(btn.innerText);
-                btn.classList.add('selected');
-            }
+            if(o.colors.includes(btn.innerText)) { selectedColors.add(btn.innerText); btn.classList.add('selected'); }
         });
         document.getElementById('colorCount').innerText = `已選 ${selectedColors.size} 項`;
         document.getElementById('saveBtn').innerText = "確認更新紀錄";
@@ -263,33 +274,28 @@
     function toggleStatus(id) {
         const idx = orders.findIndex(o => o.id == id);
         orders[idx].isClosed = !orders[idx].isClosed;
-        localStorage.setItem('dapu_final_v2', JSON.stringify(orders));
+        localStorage.setItem('dapu_v4_final', JSON.stringify(orders));
         renderOrders(); renderCalendar();
     }
     function changeMonth(n) { viewDate.setMonth(viewDate.getMonth() + n); renderCalendar(); }
-    function shareSite() { navigator.share({ title: '達譜系統', url: window.location.href }); }
+    function shareSite() { if(navigator.share) navigator.share({ title: '達譜系統', url: window.location.href }); }
 
-    // Excel 匯出邏輯
     function exportExcel() {
-        if (orders.length === 0) return alert("目前沒有訂單資料可以匯出。");
-        
-        // 整理輸出格式
+        if (orders.length === 0) return alert("無資料可匯出");
         const dataForExcel = orders.map(o => ({
             "案場名稱": o.site,
             "負責人": o.manager,
+            "下單日": o.orderDate || "",
+            "大阪到貨日": o.arrival || "",
             "最終出貨日": o.ship,
             "訂單狀態": o.isClosed ? "已結束" : "進行中",
             "所選色板款式": o.colors,
             "訂單備註": o.memo || ""
         }));
-
         const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "案場清單");
-        
-        // 生成檔名：達譜案場報表_20231027.xlsx
-        const dateTag = new Date().toISOString().split('T')[0].replace(/-/g, "");
-        XLSX.writeFile(workbook, `達譜案場報表_${dateTag}.xlsx`);
+        XLSX.writeFile(workbook, `達譜案場報表_${new Date().toLocaleDateString()}.xlsx`);
     }
 
     init();
