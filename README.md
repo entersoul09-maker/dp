@@ -87,7 +87,7 @@
         </div>
         <div class="form-row">
             <div><label>大阪到貨日</label><input type="date" id="arrivalDate" onchange="autoCalc()"></div>
-            <div><label>最終出貨日 (不含週末)</label><input type="date" id="shipDate"></div>
+            <div><label>最終出貨日 (第6工作天)</label><input type="date" id="shipDate"></div>
         </div>
         <div style="margin-bottom:12px;">
             <label>訂單備註</label>
@@ -114,7 +114,6 @@
 </div>
 
 <script>
-    // 2. 更新後的 API 網址
     const API_URL = "https://script.google.com/macros/s/AKfycbwCMzNtexj_pUwN2o37MF-BY44tR8_Vv05xULQzdEr7Im5m_FWheF1nHErdHHPaKavh-A/exec";
 
     const paletteData = ["D317A 水藍", "D321A 鐵灰", "D322A 尼羅河綠", "D301B 黑織紗", "D302B 灰織紗", "D395B 布紋棕", "D1060B 波爾多雪松", "D1122B 風化碳木", "D1183B 北美原橡", "D1185B 冰島白橡", "D1187B 凡爾賽橡木", "D1348 洗白橡木", "D1370B 橡木洗白", "D2091B 丹麥櫸木", "D2415B 安藤清水模", "D3183B 瑞典灰榆", "D5007B 摩卡柚木", "D6357B 白雲岩", "D6358B 泥灰岩", "D371B 台灣柚木", "D373B 古典榆木", "D376B 曉灰榆木", "D3381B 札拉淺橡", "D3383B 札拉灰橡", "D6590C 奶茶米", "D9058C 北歐白核桃", "D6000C 珍珠白", "D6000SC 雪白紋", "D702C 象牙灰", "D552C 艾夏櫚木", "D555C 粉朵拉櫚木", "外訂版", "ETC 其他"];
@@ -124,12 +123,14 @@
     let selectedColors = new Set();
     let viewDate = new Date();
 
-    // 格式化日期，去掉 Z 及時間字串
     function formatDate(dateInput) {
         if (!dateInput) return "";
         const d = new Date(dateInput);
         if (isNaN(d.getTime())) return dateInput;
-        return d.toISOString().split('T')[0];
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     }
 
     async function init() {
@@ -148,7 +149,6 @@
         try {
             const resp = await fetch(API_URL);
             const rawData = await resp.json();
-            // 3. 去掉時間雜訊
             orders = rawData.map(o => ({
                 ...o,
                 orderDate: formatDate(o.orderDate),
@@ -165,14 +165,22 @@
         renderOrders();
     }
 
-    // 1. 自動計算出貨日：避開週末
+    // 關鍵修正：到貨日為第一天，往後推至第6個工作天
     function autoCalc() {
         let date = new Date(document.getElementById('arrivalDate').value);
-        let addedDays = 0;
-        while (addedDays < 6) {
+        if (isNaN(date.getTime())) return;
+        
+        let workDayCount = 0;
+        // 如果到貨日當天不是週末，則算作第一天工作日
+        if (date.getDay() !== 0 && date.getDay() !== 6) {
+            workDayCount = 1;
+        }
+
+        // 循環直到達到 6 個工作天
+        while (workDayCount < 6) {
             date.setDate(date.getDate() + 1);
             if (date.getDay() !== 0 && date.getDay() !== 6) {
-                addedDays++;
+                workDayCount++;
             }
         }
         document.getElementById('shipDate').valueAsDate = date;
@@ -217,7 +225,7 @@
                 <div style="font-size:0.85rem; color:#666;">
                     下單：${o.orderDate} | 到貨：${o.arrival} | 出貨：${o.ship}<br>
                     色板：${o.colors}<br>
-                    ${o.memo ? `備註：<span style="color:var(--accent);">${o.memo}</span>` : ''}
+                    ${o.memo ? `備註：<span style="color:var(--accent); font-weight:bold;">${o.memo}</span>` : ''}
                 </div>
             </div>
         `).join('');
@@ -291,7 +299,18 @@
     function changeMonth(n) { viewDate.setMonth(viewDate.getMonth() + n); renderCalendar(); }
     function resetForm() { location.reload(); }
     function shareSite() { if(navigator.share) navigator.share({ title: '管理系統', url: window.location.href }); }
-    function exportExcel() { /* 同前 logic */ }
+    function exportExcel() {
+        const y = viewDate.getFullYear(), m = viewDate.getMonth();
+        const currentMonthOrders = orders.filter(o => {
+            const shipD = new Date(o.ship);
+            return shipD.getFullYear() === y && shipD.getMonth() === m;
+        });
+        if (currentMonthOrders.length === 0) return alert("本月份無資料可匯出");
+        const worksheet = XLSX.utils.json_to_sheet(currentMonthOrders);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "案場報表");
+        XLSX.writeFile(workbook, `達譜_${y}_${m+1}月份報表.xlsx`);
+    }
 
     init();
 </script>
