@@ -52,12 +52,18 @@
         .date-warn { font-size: 0.7rem; color: #E67E22; margin-top: 4px; display: none; }
         .memo-tag { color: #E67E22; font-weight: bold; }
 
+        /* 頁尾統計區塊 */
         .footer-section { 
-            display: flex; justify-content: space-between; align-items: center; 
-            padding: 20px 5px 40px; margin-top: 10px; border-top: 1px dashed #ccc;
+            display: flex; flex-direction: column; align-items: center; 
+            padding: 20px 5px 40px; margin-top: 20px; border-top: 2px solid #EEE;
         }
-        .stats-box { font-size: 0.85rem; color: #444; background: #eee; padding: 8px 12px; border-radius: 8px; font-weight: bold; }
-        .export-btn { background: white; border: 1px solid #999; color: #666; padding: 8px 15px; border-radius: 5px; font-size: 0.8rem; cursor: pointer; }
+        .stats-display { 
+            text-align: center; margin-bottom: 15px; width: 100%;
+        }
+        .stats-label { font-size: 0.8rem; color: #888; margin-bottom: 5px; }
+        .stats-number { font-size: 1.5rem; color: var(--accent); font-weight: 900; }
+        
+        .export-btn { background: white; border: 1px solid #333; color: #333; padding: 10px 25px; border-radius: 8px; font-size: 0.9rem; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -112,8 +118,11 @@
     <div id="orderList"></div>
 
     <div class="footer-section">
-        <div class="stats-box" id="monthlyStats">本月訂單總數：0</div>
-        <button class="export-btn" onclick="exportExcel()">📊 輸出 Excel</button>
+        <div class="stats-display">
+            <div class="stats-label" id="statsMonthLabel">本月出貨訂單總數</div>
+            <div class="stats-number" id="monthlyStats">0 筆</div>
+        </div>
+        <button class="export-btn" onclick="exportExcel()">📊 輸出本月 Excel 報表</button>
     </div>
 </div>
 
@@ -127,7 +136,7 @@
         "D555C 粉朵拉櫚木", "外訂版", "ETC 其他"
     ];
 
-    let orders = JSON.parse(localStorage.getItem('dapu_v4_final')) || [];
+    let orders = JSON.parse(localStorage.getItem('dapu_v5_final')) || [];
     let selectedColors = new Set();
     let viewDate = new Date();
 
@@ -139,7 +148,6 @@
         autoCalc();
         renderCalendar();
         renderOrders();
-        updateStats();
     }
 
     function toggleColor(el, name) {
@@ -177,6 +185,8 @@
         grid.innerHTML = '';
         const y = viewDate.getFullYear(), m = viewDate.getMonth();
         document.getElementById('calLabel').innerText = `${y}年 ${m+1}月`;
+        document.getElementById('statsMonthLabel').innerText = `${m+1}月 出貨訂單總數`;
+        
         ['日','一','二','三','四','五','六'].forEach(d => grid.innerHTML += `<div class="cal-day-label">${d}</div>`);
         const firstDay = new Date(y, m, 1).getDay();
         const lastDate = new Date(y, m+1, 0).getDate();
@@ -190,13 +200,14 @@
         updateStats();
     }
 
+    // 重點：依照顯示月份的出貨日計算總量
     function updateStats() {
         const y = viewDate.getFullYear(), m = viewDate.getMonth();
         const monthlyCount = orders.filter(o => {
-            const d = new Date(o.ship);
-            return d.getFullYear() === y && d.getMonth() === m;
+            const shipD = new Date(o.ship);
+            return shipD.getFullYear() === y && shipD.getMonth() === m;
         }).length;
-        document.getElementById('monthlyStats').innerText = `本月訂單總數：${monthlyCount}`;
+        document.getElementById('monthlyStats').innerText = `${monthlyCount} 筆`;
     }
 
     function showTip(date) {
@@ -224,13 +235,15 @@
         const idx = orders.findIndex(o => o.id == order.id);
         if(idx > -1) { order.isClosed = orders[idx].isClosed; orders[idx] = order; }
         else { orders.unshift(order); }
-        localStorage.setItem('dapu_v4_final', JSON.stringify(orders));
+        localStorage.setItem('dapu_v5_final', JSON.stringify(orders));
         location.reload();
     }
 
     function renderOrders() {
         const container = document.getElementById('orderList');
-        container.innerHTML = orders.map(o => `
+        // 依照出貨日排序（最近的在上面）
+        const sortedOrders = [...orders].sort((a,b) => new Date(b.ship) - new Date(a.ship));
+        container.innerHTML = sortedOrders.map(o => `
             <div class="order-card ${o.isClosed?'closed':''}">
                 <div class="btn-group">
                     <button class="action-btn" style="color:orange" onclick="editOrder(${o.id})">修正</button>
@@ -274,28 +287,36 @@
     function toggleStatus(id) {
         const idx = orders.findIndex(o => o.id == id);
         orders[idx].isClosed = !orders[idx].isClosed;
-        localStorage.setItem('dapu_v4_final', JSON.stringify(orders));
+        localStorage.setItem('dapu_v5_final', JSON.stringify(orders));
         renderOrders(); renderCalendar();
     }
     function changeMonth(n) { viewDate.setMonth(viewDate.getMonth() + n); renderCalendar(); }
     function shareSite() { if(navigator.share) navigator.share({ title: '達譜系統', url: window.location.href }); }
 
     function exportExcel() {
-        if (orders.length === 0) return alert("無資料可匯出");
-        const dataForExcel = orders.map(o => ({
+        const y = viewDate.getFullYear(), m = viewDate.getMonth();
+        const currentMonthOrders = orders.filter(o => {
+            const shipD = new Date(o.ship);
+            return shipD.getFullYear() === y && shipD.getMonth() === m;
+        });
+
+        if (currentMonthOrders.length === 0) return alert("本月份無出貨資料可匯出");
+        
+        const dataForExcel = currentMonthOrders.map(o => ({
             "案場名稱": o.site,
             "負責人": o.manager,
             "下單日": o.orderDate || "",
             "大阪到貨日": o.arrival || "",
             "最終出貨日": o.ship,
-            "訂單狀態": o.isClosed ? "已結束" : "進行中",
-            "所選色板款式": o.colors,
-            "訂單備註": o.memo || ""
+            "狀態": o.isClosed ? "已結束" : "進行中",
+            "色板款式": o.colors,
+            "備註": o.memo || ""
         }));
+        
         const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "案場清單");
-        XLSX.writeFile(workbook, `達譜案場報表_${new Date().toLocaleDateString()}.xlsx`);
+        XLSX.utils.book_append_sheet(workbook, worksheet, "本月出貨單");
+        XLSX.writeFile(workbook, `達譜_${y}年${m+1}月報表.xlsx`);
     }
 
     init();
