@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>達譜企業 (股) 案場訂單系統</title>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #FDFDFB; 
+            --text-color: #2C2C2C; 
+            --accent-color: #FFB74D; 
+            --done-color: #999999;
+            --border-color: #E0E0DB;
+            --white: #FFFFFF;
+        }
+
+        * { box-sizing: border-box; font-family: "Noto Sans TC", sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 10px; letter-spacing: 0.5px; }
+
+        .container { max-width: 600px; margin: 0 auto; }
+        
+        header { 
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 15px 0; border-bottom: 1px solid var(--accent-color); margin-bottom: 15px; 
+        }
+        header h1 { font-size: 1.1rem; font-weight: 500; margin: 0; flex-grow: 1; text-align: center; padding-left: 40px; }
+        .btn-share-top { background: none; border: 1px solid var(--border-color); border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; }
+
+        /* 日曆樣式 */
+        .calendar-card { background: var(--white); border: 1px solid var(--border-color); padding: 15px; margin-bottom: 20px; border-radius: 4px; }
+        .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-weight: bold; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+        .cal-day-head { font-size: 0.7rem; color: #888; padding-bottom: 5px; }
+        .cal-date { 
+            padding: 8px 0; font-size: 0.85rem; border-radius: 4px; position: relative; cursor: pointer; 
+            min-height: 40px; display: flex; flex-direction: column; align-items: center;
+        }
+        .cal-date.today { background: #f0f0f0; font-weight: bold; }
+        .cal-date.has-event::after {
+            content: ''; width: 5px; height: 5px; background: var(--accent-color); border-radius: 50%;
+            position: absolute; bottom: 5px;
+        }
+        .event-tip { font-size: 0.75rem; color: #E67E22; margin-top: 10px; padding: 8px; background: #FFF9F0; border-radius: 4px; display: none; }
+
+        /* 表單樣式 */
+        .card { background: var(--white); padding: 20px; border-radius: 2px; border: 1px solid var(--border-color); box-shadow: 0 2px 10px rgba(0,0,0,0.02); margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-size: 0.8rem; margin-bottom: 6px; color: #666; font-weight: bold; }
+        input { width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 1rem; background: var(--bg-color); }
+        
+        .palette-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-height: 200px; overflow-y: auto; border: 1px solid var(--border-color); padding: 5px; }
+        .palette-item { padding: 6px 2px; border: 1px solid #eee; background: #fff; cursor: pointer; text-align: center; font-size: 0.7rem; min-height: 45px; display: flex; align-items: center; justify-content: center; }
+        .palette-item.selected { background: var(--accent-color); color: white; border-color: var(--accent-color); }
+
+        .ship-box { background: #FFF9F0; border: 1px solid var(--accent-color); padding: 12px; border-radius: 4px; }
+        
+        /* 訂單項目 */
+        .order-item { background: #FFF; padding: 15px; margin-bottom: 12px; border: 1px solid var(--border-color); position: relative; }
+        .order-item.status-closed { background: #F5F5F5; opacity: 0.7; }
+        .order-item.status-closed .order-title, .order-item.status-closed .order-info, .order-item.status-closed .order-tag { 
+            text-decoration: line-through; color: var(--done-color); 
+        }
+        
+        .order-title { font-size: 1rem; font-weight: bold; border-left: 4px solid var(--accent-color); padding-left: 10px; margin-bottom: 5px; }
+        .order-info { font-size: 0.8rem; color: #555; line-height: 1.5; }
+        .order-tag { display: inline-block; background: var(--accent-color); color: white; padding: 2px 8px; font-size: 0.75rem; margin-top: 8px; }
+        
+        .action-btns { position: absolute; top: 10px; right: 10px; display: flex; gap: 5px; }
+        .btn-sm { padding: 4px 8px; border-radius: 4px; font-size: 0.65rem; cursor: pointer; border: 1px solid #ddd; background: #fff; }
+        
+        .btn-main { width: 100%; padding: 15px; background: var(--text-color); color: white; border: none; font-size: 1rem; cursor: pointer; margin-top: 10px; }
+        .btn-cancel { width: 100%; padding: 10px; background: #fff; border: 1px solid var(--text-color); margin-top: 5px; cursor: pointer; }
+        .search-bar { width: 100%; padding: 10px; border: 1px solid var(--border-color); margin-bottom: 15px; border-radius: 20px; text-align: center; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>達譜企業案場系統</h1>
+        <button class="btn-share-top" onclick="shareSite()"><span>📤</span></button>
+    </header>
+
+    <div class="calendar-card">
+        <div class="calendar-header">
+            <span onclick="changeMonth(-1)" style="cursor:pointer">◀</span>
+            <span id="calendarMonth">年 月</span>
+            <span onclick="changeMonth(1)" style="cursor:pointer">▶</span>
+        </div>
+        <div class="calendar-grid" id="calendarGrid"></div>
+        <div id="eventTip" class="event-tip"></div>
+    </div>
+
+    <div class="card" id="inputSection">
+        <input type="hidden" id="editingId">
+        <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div><label>案場名稱</label><input type="text" id="siteName"></div>
+            <div><label>負責人</label><input type="text" id="manager"></div>
+        </div>
+        <div class="form-group"><label>起始日期 (下單日)</label><input type="date" id="startDate" onchange="autoCalc()"></div>
+        <div class="form-group">
+            <label>色板款式 (可複選)</label>
+            <div class="palette-grid" id="paletteGrid"></div>
+            <input type="text" id="selectedColorDisplay" readonly style="margin-top:5px; font-size:0.7rem; border:none; color:#888;" placeholder="未選取色板">
+        </div>
+        <div class="form-group"><label>色板狀況</label><input type="text" id="note" placeholder="紀錄進度..."></div>
+        <div class="form-group ship-box">
+            <label>最終出貨日 (排除六日)</label>
+            <input type="date" id="shipDate" onchange="validateWeekday(this)">
+        </div>
+        <button class="btn-main" id="saveBtn" onclick="saveOrder()">保存訂單紀錄</button>
+        <button class="btn-cancel" id="cancelBtn" style="display:none;" onclick="resetForm()">取消修正</button>
+    </div>
+
+    <input type="text" id="search" class="search-bar" placeholder="🔍 搜尋案場名稱..." oninput="renderOrders()">
+    <div id="orderList"></div>
+    
+    <div style="text-align:center; padding: 20px 0;">
+        <button onclick="exportExcel()" style="background:none; border:1px solid #ccc; padding:10px 20px; font-size:0.8rem">匯出 Excel 報表</button>
+    </div>
+</div>
+
+<script>
+    const paletteData = [
+        {id:"D317A", name:"水藍"}, {id:"D321A", name:"鐵灰"}, {id:"D322A", name:"尼羅河綠"},
+        {id:"D301B", name:"黑織紗"}, {id:"D302B", name:"灰織紗"}, {id:"D395B", name:"布紋棕"},
+        {id:"D1060B", name:"波爾多雪松"}, {id:"D1122B", name:"風化碳木"}, {id:"D1183B", name:"北美原橡"},
+        {id:"D1185B", name:"冰島白橡"}, {id:"D1187B", name:"凡爾賽橡木"}, {id:"D1348", name:"洗白橡木"},
+        {id:"D1370B", name:"橡木洗白"}, {id:"D2091B", name:"丹麥櫸木"}, {id:"D2415B", name:"安藤清水模"},
+        {id:"D3183B", name:"瑞典灰榆"}, {id:"D5007B", name:"摩卡柚木"}, {id:"D6357B", name:"白雲岩"},
+        {id:"D6358B", name:"泥灰岩"}, {id:"D371B", name:"台灣柚木"}, {id:"D373B", name:"古典榆木"},
+        {id:"D376B", name:"曉灰榆木"}, {id:"D3381B", name:"札拉淺橡"}, {id:"D3383B", name:"札拉灰橡"},
+        {id:"D6590C", name:"奶茶米"}, {id:"D9058C", name:"北歐白核桃"}, {id:"D6000C", name:"珍珠白"},
+        {id:"D6000SC", name:"雪白紋"}, {id:"D702C", name:"象牙灰"}, {id:"D552C", name:"艾夏櫚木"},
+        {id:"D555C", name:"粉朵拉櫚木"}, {id:"-", name:"外訂版"}, {id:"ETC", name:"其他"}
+    ];
+
+    let orders = JSON.parse(localStorage.getItem('dapu_v12_data')) || [];
+    let selectedColors = new Set();
+    let currentCalDate = new Date();
+
+    function init() {
+        const grid = document.getElementById('paletteGrid');
+        grid.innerHTML = paletteData.map(c => `
+            <div class="palette-item" id="p-${c.id}" onclick="toggleColor('${c.id}','${c.name}')">
+                ${c.name}<br>${c.id}
+            </div>
+        `).join('');
+        document.getElementById('startDate').valueAsDate = new Date();
+        autoCalc();
+        renderCalendar();
+        renderOrders();
+    }
+
+    function renderCalendar() {
+        const grid = document.getElementById('calendarGrid');
+        const monthLabel = document.getElementById('calendarMonth');
+        grid.innerHTML = '';
+        const year = currentCalDate.getFullYear();
+        const month = currentCalDate.getMonth();
+        monthLabel.innerText = `${year}年 ${month + 1}月`;
+
+        const days = ['日','一','二','三','四','五','六'];
+        days.forEach(d => grid.innerHTML += `<div class="cal-day-head">${d}</div>`);
+
+        const firstDay = new Date(year, month, 1).getDay();
+        const lastDate = new Date(year, month + 1, 0).getDate();
+
+        for (let i = 0; i < firstDay; i++) grid.innerHTML += `<div></div>`;
+        for (let d = 1; d <= lastDate; d++) {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const isToday = new Date().toISOString().split('T')[0] === dateStr;
+            const hasEvent = orders.some(o => o.ship === dateStr && !o.isClosed);
+            grid.innerHTML += `
+                <div class="cal-date ${isToday ? 'today' : ''} ${hasEvent ? 'has-event' : ''}" onclick="showDayEvents('${dateStr}')">
+                    ${d}
+                </div>
+            `;
+        }
+    }
+
+    function showDayEvents(dateStr) {
+        const dayOrders = orders.filter(o => o.ship === dateStr && !o.isClosed);
+        const tip = document.getElementById('eventTip');
+        if (dayOrders.length > 0) {
+            tip.style.display = 'block';
+            tip.innerHTML = `📅 <strong>${dateStr} 出貨：</strong><br>` + dayOrders.map(o => `• ${o.site}`).join('<br>');
+        } else { tip.style.display = 'none'; }
+    }
+
+    function changeMonth(dir) {
+        currentCalDate.setMonth(currentCalDate.getMonth() + dir);
+        renderCalendar();
+    }
+
+    function toggleColor(id, name) {
+        const displayLabel = (id === 'ETC') ? '其他' : `${id} ${name}`;
+        if (selectedColors.has(displayLabel)) {
+            selectedColors.delete(displayLabel);
+            document.getElementById(`p-${id}`).classList.remove('selected');
+        } else {
+            selectedColors.add(displayLabel);
+            document.getElementById(`p-${id}`).classList.add('selected');
+        }
+        document.getElementById('selectedColorDisplay').value = Array.from(selectedColors).join(', ');
+    }
+
+    function autoCalc() {
+        let date = new Date(document.getElementById('startDate').value);
+        if (isNaN(date.getTime())) return;
+        let count = 0;
+        while (count < 6) {
+            date.setDate(date.getDate() + 1);
+            if (date.getDay() !== 0 && date.getDay() !== 6) count++;
+        }
+        document.getElementById('shipDate').valueAsDate = date;
+    }
+
+    function validateWeekday(input) {
+        let selected = new Date(input.value);
+        let day = selected.getDay();
+        if (day === 0 || day === 6) {
+            selected.setDate(selected.getDate() + (day === 6 ? 2 : 1));
+            input.valueAsDate = selected;
+        }
+    }
+
+    function saveOrder() {
+        const site = document.getElementById('siteName').value;
+        const editingId = document.getElementById('editingId').value;
+        if(!site) return alert("請輸入案場名稱");
+
+        const order = {
+            id: editingId ? parseInt(editingId) : Date.now(),
+            site: site, manager: document.getElementById('manager').value,
+            start: document.getElementById('startDate').value,
+            colors: document.getElementById('selectedColorDisplay').value,
+            note: document.getElementById('note').value,
+            ship: document.getElementById('shipDate').value,
+            isClosed: false
+        };
+
+        if(editingId) {
+            const idx = orders.findIndex(o => o.id === order.id);
+            order.isClosed = orders[idx].isClosed;
+            orders[idx] = order;
+        } else { orders.unshift(order); }
+        
+        localStorage.setItem('dapu_v12_data', JSON.stringify(orders));
+        resetForm(); renderCalendar(); renderOrders();
+    }
+
+    function editOrder(id) {
+        const o = orders.find(x => x.id === id);
+        if(o.isClosed) return;
+        document.getElementById('editingId').value = o.id;
+        document.getElementById('siteName').value = o.site;
+        document.getElementById('manager').value = o.manager;
+        document.getElementById('startDate').value = o.start;
+        document.getElementById('note').value = o.note;
+        document.getElementById('shipDate').value = o.ship;
+        
+        selectedColors.clear();
+        document.querySelectorAll('.palette-item').forEach(i => i.classList.remove('selected'));
+        if(o.colors) {
+            const arr = o.colors.split(', ');
+            arr.forEach(c => {
+                selectedColors.add(c);
+                let code = (c === '其他') ? 'ETC' : c.split(' ')[0];
+                const el = document.getElementById(`p-${code}`);
+                if(el) el.classList.add('selected');
+            });
+        }
+        document.getElementById('selectedColorDisplay').value = o.colors;
+        document.getElementById('saveBtn').innerText = "確認修正";
+        document.getElementById('cancelBtn').style.display = "block";
+        window.scrollTo({top:0, behavior:'smooth'});
+    }
+
+    function resetForm() {
+        document.getElementById('editingId').value = "";
+        document.getElementById('siteName').value = "";
+        document.getElementById('manager').value = "";
+        document.getElementById('note').value = "";
+        document.getElementById('saveBtn').innerText = "保存訂單紀錄";
+        document.getElementById('cancelBtn').style.display = "none";
+        selectedColors.clear();
+        document.querySelectorAll('.palette-item').forEach(i => i.classList.remove('selected'));
+        document.getElementById('selectedColorDisplay').value = "";
+        autoCalc();
+    }
+
+    function toggleStatus(id) {
+        const idx = orders.findIndex(o => o.id === id);
+        orders[idx].isClosed = !orders[idx].isClosed;
+        localStorage.setItem('dapu_v12_data', JSON.stringify(orders));
+        renderCalendar(); renderOrders();
+    }
+
+    function renderOrders() {
+        const term = document.getElementById('search').value.toLowerCase();
+        const container = document.getElementById('orderList');
+        const filtered = orders.filter(o => o.site.toLowerCase().includes(term));
+        container.innerHTML = filtered.map(o => `
+            <div class="order-item ${o.isClosed ? 'status-closed' : ''}">
+                <div class="action-btns">
+                    ${!o.isClosed ? `<button class="btn-sm" style="color:#FFB74D" onclick="editOrder(${o.id})">修正</button>` : ''}
+                    <button class="btn-sm" onclick="toggleStatus(${o.id})">${o.isClosed ? '恢復' : '結束'}</button>
+                    <button class="btn-sm" onclick="deleteOrder(${o.id})">刪</button>
+                </div>
+                <div class="order-title">${o.site}</div>
+                <div class="order-info">負責人：${o.manager} <br> 出貨：${o.ship} <br> 狀況：${o.note}</div>
+            </div>
+        `).join('');
+    }
+
+    function deleteOrder(id) {
+        if(confirm("確定刪除？")) {
+            orders = orders.filter(o => o.id !== id);
+            localStorage.setItem('dapu_v12_data', JSON.stringify(orders));
+            renderCalendar(); renderOrders();
+        }
+    }
+
+    function shareSite() {
+        if (navigator.share) navigator.share({ title: '達譜系統', url: window.location.href });
+        else alert("請複製網址分享");
+    }
+
+    function exportExcel() {
+        const ws = XLSX.utils.json_to_sheet(orders);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "訂單");
+        XLSX.writeFile(wb, `達譜案場單.xlsx`);
+    }
+
+    init();
+</script>
+
+</body>
+</html>
