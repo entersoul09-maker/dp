@@ -95,7 +95,7 @@
             <input type="date" id="orderDate">
         </div>
         <div class="form-row">
-            <div><label>大阪到貨日</label><input type="date" id="arrivalDate" onchange="autoCalc()"></div>
+            <div><label>大板到貨日</label><input type="date" id="arrivalDate" onchange="autoCalc()"></div>
             <div>
                 <label>最終出貨日 (不含六日)</label>
                 <input type="date" id="shipDate" onchange="validateShipDate(this)">
