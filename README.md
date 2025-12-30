@@ -57,6 +57,14 @@
         .main-btn { width: 100%; padding: 15px; background: #333; color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: bold; margin-top: 10px; }
         .date-warn { font-size: 0.7rem; color: #E67E22; margin-top: 4px; display: none; }
         .memo-tag { color: #E67E22; font-weight: bold; }
+
+        /* 匯出按鈕樣式 */
+        .export-section { text-align: center; padding: 20px 0 40px; }
+        .export-btn { 
+            background: none; border: 1px solid #999; color: #666; 
+            padding: 10px 25px; border-radius: 5px; font-size: 0.85rem; 
+            cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+        }
     </style>
 </head>
 <body>
@@ -91,23 +99,26 @@
                 <div id="dateWarn" class="date-warn">⚠️ 週末不出貨，已自動跳至週一。</div>
             </div>
         </div>
-        
         <div style="margin-bottom:12px;">
-            <label>訂單備註 (特殊需求紀錄)</label>
+            <label>訂單備註</label>
             <input type="text" id="orderMemo" placeholder="例如：需搬三樓、下午送貨...">
         </div>
-
         <div class="palette-label">
             <label>色板款式 (橫滑多選)</label>
             <span id="colorCount" style="font-size:0.7rem; color:#999;">已選 0 項</span>
         </div>
         <div class="palette-scroll" id="paletteList"></div>
-        
         <button class="main-btn" id="saveBtn" onclick="saveOrder()">保存訂單紀錄</button>
         <button id="cancelBtn" onclick="resetForm()" style="display:none; width:100%; margin-top:10px; border:none; background:none; color:#999; font-size:0.8rem;">取消修正</button>
     </div>
 
     <div id="orderList"></div>
+
+    <div class="export-section">
+        <button class="export-btn" onclick="exportExcel()">
+            <span>📊</span> 輸出成 Excel 報表
+        </button>
+    </div>
 </div>
 
 <script>
@@ -120,7 +131,7 @@
         "D555C 粉朵拉櫚木", "外訂版", "ETC 其他"
     ];
 
-    let orders = JSON.parse(localStorage.getItem('dapu_memo_v1')) || [];
+    let orders = JSON.parse(localStorage.getItem('dapu_final_v2')) || [];
     let selectedColors = new Set();
     let viewDate = new Date();
 
@@ -168,11 +179,9 @@
         grid.innerHTML = '';
         const y = viewDate.getFullYear(), m = viewDate.getMonth();
         document.getElementById('calLabel').innerText = `${y}年 ${m+1}月`;
-        
         ['日','一','二','三','四','五','六'].forEach(d => grid.innerHTML += `<div class="cal-day-label">${d}</div>`);
         const firstDay = new Date(y, m, 1).getDay();
         const lastDate = new Date(y, m+1, 0).getDate();
-        
         for(let i=0; i<firstDay; i++) grid.innerHTML += '<div></div>';
         for(let d=1; d<=lastDate; d++) {
             const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
@@ -205,7 +214,7 @@
         const idx = orders.findIndex(o => o.id == order.id);
         if(idx > -1) { order.isClosed = orders[idx].isClosed; orders[idx] = order; }
         else { orders.unshift(order); }
-        localStorage.setItem('dapu_memo_v1', JSON.stringify(orders));
+        localStorage.setItem('dapu_final_v2', JSON.stringify(orders));
         location.reload();
     }
 
@@ -236,7 +245,6 @@
         document.getElementById('manager').value = o.manager;
         document.getElementById('shipDate').value = o.ship;
         document.getElementById('orderMemo').value = o.memo || '';
-        
         selectedColors.clear();
         document.querySelectorAll('.palette-btn').forEach(btn => {
             btn.classList.remove('selected');
@@ -255,11 +263,34 @@
     function toggleStatus(id) {
         const idx = orders.findIndex(o => o.id == id);
         orders[idx].isClosed = !orders[idx].isClosed;
-        localStorage.setItem('dapu_memo_v1', JSON.stringify(orders));
+        localStorage.setItem('dapu_final_v2', JSON.stringify(orders));
         renderOrders(); renderCalendar();
     }
     function changeMonth(n) { viewDate.setMonth(viewDate.getMonth() + n); renderCalendar(); }
     function shareSite() { navigator.share({ title: '達譜系統', url: window.location.href }); }
+
+    // Excel 匯出邏輯
+    function exportExcel() {
+        if (orders.length === 0) return alert("目前沒有訂單資料可以匯出。");
+        
+        // 整理輸出格式
+        const dataForExcel = orders.map(o => ({
+            "案場名稱": o.site,
+            "負責人": o.manager,
+            "最終出貨日": o.ship,
+            "訂單狀態": o.isClosed ? "已結束" : "進行中",
+            "所選色板款式": o.colors,
+            "訂單備註": o.memo || ""
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "案場清單");
+        
+        // 生成檔名：達譜案場報表_20231027.xlsx
+        const dateTag = new Date().toISOString().split('T')[0].replace(/-/g, "");
+        XLSX.writeFile(workbook, `達譜案場報表_${dateTag}.xlsx`);
+    }
 
     init();
 </script>
