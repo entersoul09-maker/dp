@@ -79,14 +79,14 @@
         <input type="hidden" id="editId">
         <div class="form-row">
             <div><label>案場名稱</label><input type="text" id="siteName"></div>
-            <div><label>負責人</label><input type="text" id="manager"></div>
+            <div><label>客戶</label><input type="text" id="manager"></div>
         </div>
         <div style="margin-bottom:12px;">
             <label>下單日</label>
             <input type="date" id="orderDate">
         </div>
         <div class="form-row">
-            <div><label>大阪到貨日</label><input type="date" id="arrivalDate" onchange="autoCalc()"></div>
+            <div><label>大板到貨日</label><input type="date" id="arrivalDate" onchange="autoCalc()"></div>
             <div><label>最終出貨日 (第6工作天)</label><input type="date" id="shipDate"></div>
         </div>
         <div style="margin-bottom:12px;">
