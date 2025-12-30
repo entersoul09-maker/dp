@@ -138,7 +138,7 @@
 
 <script>
     // 1. 請填入您的雲端網址
-    const API_URL = "https://script.google.com/macros/s/AKfycbxe-qH7E_rVz5H6v9S30m_k9m8j2xV_3Y9k9n_z6b-7/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbwCMzNtexj_pUwN2o37MF-BY44tR8_Vv05xULQzdEr7Im5m_FWheF1nHErdHHPaKavh-A/exec";
 
     const paletteData = ["D317A 水藍", "D321A 鐵灰", "D322A 尼羅河綠", "D301B 黑織紗", "D302B 灰織紗", "D395B 布紋棕", "D1060B 波爾多雪松", "D1122B 風化碳木", "D1183B 北美原橡", "D1185B 冰島白橡", "D1187B 凡爾賽橡木", "D1348 洗白橡木", "D1370B 橡木洗白", "D2091B 丹麥櫸木", "D2415B 安藤清水模", "D3183B 瑞典灰榆", "D5007B 摩卡柚木", "D6357B 白雲岩", "D6358B 泥灰岩", "D371B 台灣柚木", "D373B 古典榆木", "D376B 曉灰榆木", "D3381B 札拉淺橡", "D3383B 札拉灰橡", "D6590C 奶茶米", "D9058C 北歐白核桃", "D6000C 珍珠白", "D6000SC 雪白紋", "D702C 象牙灰", "D552C 艾夏櫚木", "D555C 粉朵拉櫚木", "外訂版", "ETC 其他"];
 
